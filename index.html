@@ -1007,8 +1007,8 @@ function updateStageButtonEffects(stage) {
     // 仅第二阶段：每点击一次“不要”，按钮缩小一次
     // 缩小后的尺寸继续累积，进入第三阶段后不再缩小
     if (stage === 1) {
-      noBaseWidth = Math.max(42, noBaseWidth * 0.9);
-      noBaseHeight = Math.max(28, noBaseHeight * 0.9);
+      noBaseWidth = Math.max(42, noBaseWidth * 0.95);
+      noBaseHeight = Math.max(28, noBaseHeight * 0.95);
 
       no.style.width = `${noBaseWidth}px`;
       no.style.height = `${noBaseHeight}px`;
@@ -1288,10 +1288,8 @@ function makeUp() {
     "good"
   );
 
-  buttons.innerHTML =
-    '<button class="btn yes" id="restart">♡ 再抱一次 ♡</button>';
-
-  document.getElementById("restart").addEventListener("click", restart);
+  buttons.innerHTML = "";
+  buttons.classList.add("hidden");
 
   footer.textContent = "LOVE YOU ♡";
 
@@ -1348,7 +1346,7 @@ function refuse() {
         updateStageButtonEffects(currentStage);
       }
 
-      if (currentStage === 3) {
+      if (currentStage === 2 || currentStage === 3) {
         moveNoTowardYes();
       }
     }
