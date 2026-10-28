@@ -426,12 +426,12 @@ h1 {
 .buttons .no {
   position: relative;
   z-index: 5;
-  flex: 0 0 auto;
-  width: 90px;
-  height: 60px;
-  min-height: 0;
+  flex: 1 1 0;
+  width: auto;
+  height: auto;
+  min-height: 48px;
   max-width: none;
-  aspect-ratio: 3 / 2;
+  aspect-ratio: auto;
   padding: 0 8px;
   transform: none;
   transition:
@@ -495,6 +495,50 @@ h1 {
     width: var(--no-width, 78px);
     height: var(--no-height, 52px);
   }
+}
+
+/* ===== 修复按钮初始尺寸、渐进移动与重叠 ===== */
+
+/* 初始状态：两个按钮尺寸一致，保持原来的并排布局 */
+.buttons:not(.growing) .yes,
+.buttons:not(.growing) .no {
+  flex: 1 1 0;
+  width: auto;
+  height: auto;
+  min-height: 48px;
+}
+
+/* 增长状态：按钮在原位置上移动，不重新排列 */
+.buttons.growing {
+  position: relative;
+  display: block;
+  gap: 0;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.buttons.growing .yes,
+.buttons.growing .no {
+  position: absolute;
+  margin: 0;
+  flex: 0 0 auto;
+  max-width: none;
+  transition:
+    left .3s ease,
+    top .3s ease,
+    width .3s ease,
+    height .3s ease,
+    font-size .3s ease,
+    box-shadow .15s ease;
+}
+
+.buttons.growing .yes {
+  z-index: 2;
+}
+
+.buttons.growing .no {
+  z-index: 5;
+  transform: none;
 }
   
 </style>
@@ -768,34 +812,41 @@ let yesBaseHeight = 0;
 
 let noBaseWidth = 0;
 let noBaseHeight = 0;
+
+let yesStartX = null;
+let yesStartY = null;
 let noStartX = null;
 let noStartY = null;
 let noMoveDistance = 0;
 
 function initializeYesSize() {
-  if (!yes) return;
+  if (!yes || !no || !buttons) return;
 
-  const rect = yes.getBoundingClientRect();
+  // 只在初始布局下记录尺寸，确保两个按钮最初大小一致
+  if (!yesBaseWidth || !yesBaseHeight) {
+    const yesRect = yes.getBoundingClientRect();
+    yesBaseWidth = yesRect.width;
+    yesBaseHeight = yesRect.height;
+  }
 
-  if (!yesBaseWidth) yesBaseWidth = rect.width;
-  if (!yesBaseHeight) yesBaseHeight = rect.height;
-
-  if (no && !noBaseWidth) {
+  if (!noBaseWidth || !noBaseHeight) {
     const noRect = no.getBoundingClientRect();
     noBaseWidth = noRect.width;
     noBaseHeight = noRect.height;
   }
 
-  applyYesGrowth();
+  if (yesGrowth > 0) {
+    applyYesGrowth();
+  }
 }
 
+/* 和好按钮逐次增大，并逐渐向按钮区域中央移动 */
 function applyYesGrowth() {
-  if (!yes || !buttons || !yesBaseWidth || !yesBaseHeight) return;
+  if (!yes || !no || !buttons || !yesBaseWidth || !yesBaseHeight) return;
 
   const targetWidth = yesBaseWidth + yesGrowth * 14;
   const targetHeight = yesBaseHeight + yesGrowth * 22;
 
-  yes.style.position = "relative";
   yes.style.width = `${targetWidth}px`;
   yes.style.height = `${targetHeight}px`;
   yes.style.minHeight = `${targetHeight}px`;
@@ -805,85 +856,122 @@ function applyYesGrowth() {
   yes.style.fontSize = `${Math.min(15 + yesGrowth * 0.5, 22)}px`;
   yes.style.zIndex = "2";
 
-  if (no) no.style.zIndex = "5";
+  no.style.zIndex = "5";
 
-  // 按钮区域随和好按钮高度增长，避免向上遮住气泡文字
-  buttons.style.minHeight = `${Math.max(52, targetHeight)}px`;
+  if (buttons.classList.contains("growing")) {
+    // 每次只向中央靠近一小段，不突然跳到中央
+    const centerX = Math.max(0, (buttons.clientWidth - targetWidth) / 2);
+
+    if (yesStartX === null) yesStartX = 0;
+
+    yesStartX += (centerX - yesStartX) * 0.35;
+
+    yes.style.left = `${yesStartX}px`;
+    yes.style.top = `${yesStartY}px`;
+
+    // 增大按钮区域高度，但不改变气泡的位置
+    buttons.style.minHeight = `${Math.max(52, targetHeight)}px`;
+  }
 }
 
-/* 初始化“不要”按钮的位置和独立尺寸 */
+/* 第一次进入增长阶段时记录两个按钮各自的原始位置 */
 function prepareNoButtonPosition() {
-  if (!no || !buttons) return;
+  if (!yes || !no || !buttons) return;
 
   const buttonsRect = buttons.getBoundingClientRect();
+  const yesRect = yes.getBoundingClientRect();
   const noRect = no.getBoundingClientRect();
 
-  if (!noBaseWidth) noBaseWidth = noRect.width;
-  if (!noBaseHeight) noBaseHeight = noRect.height;
-
-  // 固定独立尺寸，比例始终为 3:2
-  noBaseHeight = noBaseWidth * 2 / 3;
-
-  no.style.setProperty("--no-width", `${noBaseWidth}px`);
-  no.style.setProperty("--no-height", `${noBaseHeight}px`);
-  no.style.width = `${noBaseWidth}px`;
-  no.style.height = `${noBaseHeight}px`;
-  no.style.minHeight = "0";
-  no.style.boxSizing = "border-box";
-  no.style.flex = "0 0 auto";
-  no.style.zIndex = "5";
+  if (yesStartX === null) {
+    yesStartX = yesRect.left - buttonsRect.left;
+    yesStartY = yesRect.top - buttonsRect.top;
+  }
 
   if (noStartX === null) {
     noStartX = noRect.left - buttonsRect.left;
     noStartY = noRect.top - buttonsRect.top;
   }
 
+  if (!noBaseWidth) noBaseWidth = noRect.width;
+  if (!noBaseHeight) noBaseHeight = noRect.height;
+
+  // 不要按钮独立保留自己的尺寸，不跟随和好按钮变高
+  no.style.width = `${noBaseWidth}px`;
+  no.style.height = `${noBaseHeight}px`;
+  no.style.minHeight = `${noBaseHeight}px`;
+  no.style.boxSizing = "border-box";
+  no.style.flex = "0 0 auto";
   no.style.position = "absolute";
-  no.style.left = `${noStartX + noMoveDistance}px`;
+  no.style.left = `${noStartX}px`;
   no.style.top = `${noStartY}px`;
+  no.style.zIndex = "5";
 }
 
-/* 每次进入新阶段时清除特效，但保留累积尺寸和位置 */
+/* 重置按钮：跨阶段时保留增长与位置 */
 function resetButtonEffects() {
-  buttons.classList.remove("swapped", "growing");
-
   yes = document.getElementById("yes");
   no = document.getElementById("no");
 
-  if (!yes || !no) return;
+  if (!yes || !no || !buttons) return;
 
-  // 第二、三阶段之间切换时，保留按钮尺寸与位置
+  // 保留整个道歉阶段的按钮位置，避免进入新文案时突然归位
   const preserveGrowth =
-    phase === "apology" && (stageIndex === 1 || stageIndex === 2);
+    phase === "apology" &&
+    stageIndex >= 1 &&
+    stageIndex <= 3 &&
+    yesGrowth > 0;
 
-  if (!preserveGrowth) {
-    no.style.removeProperty("--no-width");
-    no.style.removeProperty("--no-height");
-    no.style.width = "";
-    no.style.height = "";
-    no.style.minHeight = "";
-    no.style.flex = "";
-    no.style.position = "";
-    no.style.left = "";
-    no.style.top = "";
-    no.style.transform = "";
-    no.style.zIndex = "";
-    no.style.fontSize = "";
-    no.style.maxWidth = "";
-    no.style.maxHeight = "";
-
-    noBaseWidth = 0;
-    noBaseHeight = 0;
-    noStartX = null;
-    noStartY = null;
-    noMoveDistance = 0;
-
-    buttons.style.minHeight = "";
-    buttons.style.height = "";
+  if (preserveGrowth) {
+    buttons.classList.add("growing");
+    return;
   }
+
+  buttons.classList.remove("swapped", "growing");
+
+  yes.style.position = "";
+  yes.style.left = "";
+  yes.style.top = "";
+  yes.style.width = "";
+  yes.style.height = "";
+  yes.style.minHeight = "";
+  yes.style.maxWidth = "";
+  yes.style.maxHeight = "";
+  yes.style.flex = "";
+  yes.style.fontSize = "";
+  yes.style.zIndex = "";
+
+  no.style.position = "";
+  no.style.left = "";
+  no.style.top = "";
+  no.style.width = "";
+  no.style.height = "";
+  no.style.minHeight = "";
+  no.style.maxWidth = "";
+  no.style.maxHeight = "";
+  no.style.flex = "";
+  no.style.transform = "";
+  no.style.zIndex = "";
+  no.style.removeProperty("--no-width");
+  no.style.removeProperty("--no-height");
+
+  yesGrowth = 0;
+  yesBaseWidth = 0;
+  yesBaseHeight = 0;
+  noBaseWidth = 0;
+  noBaseHeight = 0;
+
+  yesStartX = null;
+  yesStartY = null;
+  noStartX = null;
+  noStartY = null;
+  noMoveDistance = 0;
+
+  buttons.style.minHeight = "";
+  buttons.style.height = "";
 }
 
-/* 第一阶段第三次点击“不要”时交换按钮 */
+/* 第一阶段第三次点击“不要”时交换按钮位置；
+   第二、三阶段持续增长并逐渐移动，第四阶段继续保留重叠 */
 function updateStageButtonEffects(stage) {
   if (!yes || !no || !buttons) return;
 
@@ -893,22 +981,27 @@ function updateStageButtonEffects(stage) {
   }
 
   if (stage === 1 || stage === 2) {
-    // 第一次进入时记录“不要”的原始位置与尺寸
     if (!buttons.classList.contains("growing")) {
       prepareNoButtonPosition();
       buttons.classList.add("growing");
+
+      yes.style.position = "absolute";
+      yes.style.left = `${yesStartX}px`;
+      yes.style.top = `${yesStartY}px`;
+
+      no.style.left = `${noStartX}px`;
+      no.style.top = `${noStartY}px`;
     }
 
-    // 和好按钮每次继续累积增长，不受“不要”按钮尺寸影响
     yesGrowth += 1;
     applyYesGrowth();
 
-    // 只在有空间时把“不要”往旁边推；到边界后不再移动
+    // 不要按钮只在有空间时横向移动，到边界就停下
     const maxX = Math.max(0, buttons.clientWidth - noBaseWidth);
-    const nextDistance = noMoveDistance + 12;
+    const nextX = noStartX + noMoveDistance + 12;
 
-    if (noStartX + nextDistance <= maxX) {
-      noMoveDistance = nextDistance;
+    if (nextX <= maxX) {
+      noMoveDistance += 12;
     } else {
       noMoveDistance = Math.max(0, maxX - noStartX);
     }
@@ -923,7 +1016,7 @@ function updateStageButtonEffects(stage) {
 function moveNoTowardYes() {
   if (!yes || !no || !buttons) return;
 
-  buttons.classList.remove("growing");
+
   applyYesGrowth();
 
   // 获取不要按钮原始尺寸
