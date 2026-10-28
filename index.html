@@ -339,6 +339,52 @@ h1 {
     padding: 15px 12px 13px;
   }
 }
+  
+/* ===== 使用 emoji 文件夹中的真实动图 ===== */
+.pet {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 180px;
+  font-size: 0;
+  line-height: normal;
+  filter: none;
+  animation: none;
+  transform: none;
+  user-select: none;
+}
+
+.pet::after {
+  content: none;
+}
+
+.pet img {
+  display: block;
+  width: 100%;
+  height: 180px;
+  object-fit: contain;
+  image-rendering: auto;
+  animation: none;
+}
+
+/* 图片结局不再显示原来的 emoji 拥抱 */
+.scene.hug .pet {
+  display: flex;
+}
+
+.scene.hug .pair {
+  display: none;
+}
+
+@media (max-width: 380px) {
+  .pet,
+  .pet img {
+    height: 155px;
+  }
+}
+
 </style>
 </head>
 <body>
@@ -446,14 +492,100 @@ let itemIndex = 0;
 let finalIndex = 0;
 let phase = "opening";
 
-function show(text, mood = "sad", emoji = "🐶") {
-  message.textContent = text;
-  scene.className = "scene " + mood;
-  pet.textContent = emoji;
-  bar.style.width = getProgress() + "%";
 
-  if (mood === "happy" || mood === "love") hearts(3);
+/* ===== 表情图片配置 ===== */
+const emojiImages = {
+  cute: ["1.gif", "2.gif", "3.gif", "4.gif", "5.gif"],
+  love: [
+    "1.gif", "2.png", "3.gif", "4.png",
+    "5.png", "6.png", "7.png", "8.gif"
+  ],
+  mad: ["1.gif"],
+  sad: [
+    "1.gif", "2.gif", "3.gif", "4.png",
+    "5.gif", "6.gif", "7.png", "8.gif", "9.gif"
+  ],
+  good: ["1.gif"]
+};
+
+/* 记住上一张图，尽量避免连续重复 */
+let lastEmoji = "";
+
+function randomEmoji(folder) {
+  const files = emojiImages[folder] || emojiImages.cute;
+
+  let candidates = files.filter(file =>
+    files.length === 1 || `emoji/${folder}/${file}` !== lastEmoji
+  );
+
+  if (!candidates.length) candidates = files;
+
+  const file = candidates[Math.floor(Math.random() * candidates.length)];
+  lastEmoji = `emoji/${folder}/${file}`;
+
+  return lastEmoji;
 }
+
+/* 根据当前文案和情绪选择图片文件夹 */
+function chooseEmojiFolder(text, mood) {
+  if (mood === "good") return "good";
+  if (mood === "mad") return "mad";
+
+  if (/吃醋|生气|不理你|嫌我烦|闹脾气/.test(text)) {
+    return "mad";
+  }
+
+  if (
+    mood === "love" ||
+    /喜欢你|I LOVE YOU|接住你的眼泪|依赖我|重新开始|舍不得离开我/.test(text)
+  ) {
+    return "love";
+  }
+
+  if (
+    mood === "sad" ||
+    mood === "cry" ||
+    /对不起|我错了|伤心|难过|求求你|不要推开我|好痛/.test(text)
+  ) {
+    return "sad";
+  }
+
+  return "cute";
+}
+
+/* 替换原来的 show() */
+function show(text, mood = "cute", emoji = "🐶") {
+  message.textContent = text;
+
+  const folder = chooseEmojiFolder(text, mood);
+  const imagePath = randomEmoji(folder);
+
+  scene.className = "scene " + mood;
+
+  pet.innerHTML = "";
+
+  const img = document.createElement("img");
+  img.src = imagePath;
+  img.alt = "小动物表情";
+  img.draggable = false;
+
+  img.onerror = function () {
+    img.alt = "图片加载失败：" + imagePath;
+    img.style.width = "100%";
+    img.style.height = "auto";
+  };
+
+  pet.appendChild(img);
+
+  if (typeof bar !== "undefined" && bar) {
+    bar.style.width = getProgress() + "%";
+  }
+
+  if (mood === "happy" || mood === "love" || mood === "good") {
+    hearts(3);
+  }
+}
+
 
 function getProgress() {
   const total = stages.reduce((n, s) => n + s.items.length, 0)
@@ -540,22 +672,31 @@ function nextFinal() {
   no.textContent = "还是不要";
 }
 
+
 function makeUp() {
   phase = "ending";
-  scene.className = "scene hug";
-  message.textContent =
+
+  show(
     "我就知道你最好了！喜欢你🫶🏻！\n\n" +
     "让我们重新开始吧！🥹💕\n\n" +
-    "mua ～ ( ˶ˆᗜˆ˵ ) ♡";
+    "mua ～ ( ˶ˆᗜˆ˵ ) ♡",
+    "good"
+  );
 
   buttons.innerHTML =
     '<button class="btn yes" id="restart">♡ 再抱一次 ♡</button>';
 
   document.getElementById("restart").addEventListener("click", restart);
-  bar.style.width = "100%";
+
+  if (typeof bar !== "undefined" && bar) {
+    bar.style.width = "100%";
+  }
+
   footer.textContent = "ENDING UNLOCKED · 永远和姐姐贴贴 ♡";
+
   hearts(16);
 }
+
 
 function restart() {
   stageIndex = 0;
