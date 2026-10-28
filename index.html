@@ -1004,6 +1004,17 @@ function updateStageButtonEffects(stage) {
       no.style.top = `${noStartY}px`;
     }
 
+    // 仅第二阶段：每点击一次“不要”，按钮缩小一次
+    // 缩小后的尺寸继续累积，进入第三阶段后不再缩小
+    if (stage === 1) {
+      noBaseWidth = Math.max(42, noBaseWidth * 0.9);
+      noBaseHeight = Math.max(28, noBaseHeight * 0.9);
+
+      no.style.width = `${noBaseWidth}px`;
+      no.style.height = `${noBaseHeight}px`;
+      no.style.minHeight = `${noBaseHeight}px`;
+    }
+
     yesGrowth += 1;
     applyYesGrowth();
 
@@ -1208,7 +1219,16 @@ function nextApology() {
   }
 
   if (stageIndex >= stages.length) {
-    showQuestion(true);
+    // 直接进入“中嫩真中……”阶段，不再重新显示和好提问
+    // 不调用 showQuestion() 或 resetButtonEffects()，
+    // 因此保留之前累积的和好按钮尺寸和位置
+    finalIndex = 1;
+    phase = "final";
+
+    const item = finalItems[0];
+    show(item[0], item[1], item[2]);
+
+    startDodgeMode();
     return;
   }
 
