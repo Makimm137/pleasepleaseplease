@@ -718,48 +718,38 @@ function hearts(count = 2) {
   }
 }
 
-/* 每次进入新阶段，重置按钮特效 */
+
+/* 每次进入新阶段，清除阶段特效，但保留和好按钮累计尺寸 */
 function resetButtonEffects() {
   buttons.classList.remove("swapped", "growing");
+
   yes = document.getElementById("yes");
   no = document.getElementById("no");
 
   if (!yes || !no) return;
 
-  yes.style.width = "";
-  yes.style.flex = "";
-  yes.style.transform = "";
-  yes.style.position = "";
-  yes.style.left = "";
-  yes.style.top = "";
-  yes.style.zIndex = "";
+  // 注意：这里不重置 yes 的宽度、高度和定位，
+  // 这样进入下一阶段时，和好按钮会保留之前的尺寸。
 
   no.style.width = "";
+  no.style.height = "";
+  no.style.minHeight = "";
   no.style.flex = "";
   no.style.position = "";
   no.style.left = "";
   no.style.top = "";
   no.style.transform = "";
   no.style.zIndex = "";
+  no.style.fontSize = "";
+  no.style.maxWidth = "";
+  no.style.maxHeight = "";
   no.classList.remove("running-away");
 
   buttons.style.minHeight = "";
   buttons.style.height = "";
 }
 
-/* 第一阶段第三次点“不要”交换按钮 */
-function updateStageButtonEffects(stage) {
-  if (!yes || !no) return;
-
-  if (stage === 0 && stageNoClicks[0] >= 3) {
-    buttons.classList.add("swapped");
-  }
-
-  /*
-   * 第二阶段、第三阶段：
-   * 和好按钮逐渐变大，不要按钮保持原始尺寸。
-   */
-/* 和好按钮尺寸累计：跨阶段保留，不再重置 */
+/* 和好按钮的累计尺寸 */
 let yesGrowth = 0;
 let yesBaseWidth = 0;
 let yesBaseHeight = 0;
@@ -776,19 +766,18 @@ function initializeYesSize() {
 }
 
 function applyYesGrowth() {
-  if (!yes || !app) return;
+  if (!yes || !app || !yesBaseWidth || !yesBaseHeight) return;
 
-  const screenW = Math.min(window.innerWidth, document.documentElement.clientWidth);
+  const screenW = document.documentElement.clientWidth;
   const screenH = window.innerHeight;
-
   const appRect = app.getBoundingClientRect();
 
-  /*
-   * 尺寸逐渐增加，最大可覆盖整个可视屏幕。
-   * 以 app 的宽度和视口高度为基准，适配手机。
-   */
-  const maxWidth = Math.max(yesBaseWidth, Math.min(screenW - 16, appRect.width));
-  const maxHeight = Math.max(yesBaseHeight, screenH - 16);
+  const maxWidth = Math.max(
+    yesBaseWidth,
+    Math.min(screenW - 8, appRect.width)
+  );
+
+  const maxHeight = Math.max(yesBaseHeight, screenH - 8);
 
   const targetWidth = Math.min(
     maxWidth,
@@ -804,14 +793,10 @@ function applyYesGrowth() {
   yes.style.height = `${targetHeight}px`;
   yes.style.minHeight = `${targetHeight}px`;
   yes.style.flex = `0 0 ${targetWidth}px`;
-  yes.style.maxWidth = `${maxWidth}px`;
+  yes.style.maxWidth = `${screenW - 8}px`;
   yes.style.fontSize = `${Math.min(15 + yesGrowth * 0.8, 26)}px`;
   yes.style.borderRadius = `${Math.max(4, 8 - yesGrowth * 0.15)}px`;
 
-  /*
-   * 尺寸大于按钮区域时，使用 fixed 让和好按钮
-   * 能继续向视口边缘扩张，而不是撑开页面。
-   */
   if (targetHeight >= screenH * 0.65 || targetWidth >= screenW * 0.8) {
     yes.style.position = "fixed";
     yes.style.left = "50%";
@@ -819,7 +804,6 @@ function applyYesGrowth() {
     yes.style.transform = "translate(-50%, -50%)";
     yes.style.zIndex = "9998";
     yes.style.width = `${Math.min(screenW - 8, targetWidth)}px`;
-    yes.style.maxWidth = `${screenW - 8}px`;
     yes.style.height = `${Math.min(screenH - 8, targetHeight)}px`;
     yes.style.maxHeight = `${screenH - 8}px`;
     yes.style.flex = "none";
@@ -829,9 +813,11 @@ function applyYesGrowth() {
     yes.style.top = "";
     yes.style.transform = "";
     yes.style.zIndex = "2";
+    yes.style.maxHeight = "";
   }
 }
 
+/* 第一阶段第三次点击“不要”时交换按钮 */
 function updateStageButtonEffects(stage) {
   if (!yes || !no) return;
 
@@ -839,17 +825,14 @@ function updateStageButtonEffects(stage) {
     buttons.classList.add("swapped");
   }
 
-  /*
-   * 第二、三阶段点击一次就放大一次。
-   * yesGrowth 是累计值，因此进入下一阶段不会变回去。
-   */
+  /* 第二、三阶段：每点一次就累计放大 */
   if (stage === 1 || stage === 2) {
     buttons.classList.add("growing");
 
     yesGrowth += 1;
     applyYesGrowth();
 
-    /* 不要按钮保持原始尺寸，显示在和好按钮上层 */
+    /* 不要按钮保持原始尺寸，显示在和好按钮上方 */
     no.style.width = "";
     no.style.height = "";
     no.style.minHeight = "";
@@ -857,9 +840,6 @@ function updateStageButtonEffects(stage) {
     no.style.position = "relative";
     no.style.zIndex = "9999";
 
-    /*
-     * 按钮区域内允许重叠；不要按钮向和好按钮旁边挤。
-     */
     const overlap = Math.min(yesGrowth * 8, 80);
     no.style.transform = `translateX(${overlap}px)`;
   }
@@ -870,11 +850,6 @@ function moveNoTowardYes() {
   if (!yes || !no || !buttons) return;
 
   buttons.classList.remove("growing");
-
-  /*
-   * 和好按钮沿用此前累计的尺寸。
-   * 不要按钮在和好按钮上方，允许重叠。
-   */
   applyYesGrowth();
 
   no.style.position = "fixed";
@@ -890,10 +865,6 @@ function moveNoTowardYes() {
   const screenW = window.innerWidth;
   const screenH = window.innerHeight;
 
-  /*
-   * 目标点围绕和好按钮中心随机分布。
-   * 按钮较大时，也可以移动到和好按钮内部。
-   */
   const radius = Math.max(
     12,
     Math.min(yesRect.width, yesRect.height) * 0.42
@@ -912,7 +883,6 @@ function moveNoTowardYes() {
     Math.sin(angle) * distance -
     noRect.height / 2;
 
-  /* 限制在屏幕可视范围内，手机上也能点击 */
   targetX = Math.max(4, Math.min(screenW - noRect.width - 4, targetX));
   targetY = Math.max(4, Math.min(screenH - noRect.height - 4, targetY));
 
@@ -920,7 +890,6 @@ function moveNoTowardYes() {
   no.style.top = `${targetY}px`;
 }
   
-
 /* 最终阶段：不要按钮在整个屏幕范围内躲避 */
 let dodgeSpeed = 0.7;
 const maxDodgeSpeed = 5.5;
