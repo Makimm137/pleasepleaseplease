@@ -454,7 +454,75 @@ h1 {
     padding: 8px 5px;
   }
 }
+
   
+/* ===== 按钮最终布局修正 ===== */
+.app {
+  overflow: hidden;
+}
+
+.buttons {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  min-height: 52px;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: 12px;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.buttons .yes {
+  position: relative;
+  z-index: 2;
+  min-width: 0;
+  max-width: 100%;
+  flex-shrink: 1;
+  box-sizing: border-box;
+}
+
+.buttons .no {
+  position: relative;
+  z-index: 5;
+  min-width: 0;
+  max-width: 100%;
+  flex-shrink: 1;
+  box-sizing: border-box;
+  transform: none;
+}
+
+/* 放大时允许重叠，但两个按钮都留在按钮区域里 */
+.buttons.growing {
+  gap: 0;
+  overflow: hidden;
+}
+
+.buttons.growing .yes {
+  flex-shrink: 1;
+  max-width: 100%;
+}
+
+.buttons.growing .no {
+  flex: 0 0 auto;
+  z-index: 5;
+  transform: none;
+}
+
+/* 手机屏幕 */
+@media (max-width: 380px) {
+  .buttons {
+    gap: 8px;
+  }
+
+  .buttons .yes,
+  .buttons .no {
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+
 </style>
 </head>
 <body>
@@ -766,84 +834,80 @@ function initializeYesSize() {
 }
 
 function applyYesGrowth() {
-  if (!yes || !app || !yesBaseWidth || !yesBaseHeight) return;
+  if (!yes || !buttons || !yesBaseWidth || !yesBaseHeight) return;
 
-  const screenW = document.documentElement.clientWidth;
+  const availableWidth = buttons.clientWidth;
   const screenH = window.innerHeight;
-  const appRect = app.getBoundingClientRect();
 
-  const maxWidth = Math.max(
-    yesBaseWidth,
-    Math.min(screenW - 8, appRect.width)
+  // 按钮始终留在原来的按钮区域，不使用 fixed，不覆盖上方文字
+  const maxWidth = Math.max(yesBaseWidth, availableWidth);
+  const maxHeight = Math.max(
+    yesBaseHeight,
+    Math.min(screenH * 0.42, 300)
   );
-
-  const maxHeight = Math.max(yesBaseHeight, screenH - 8);
 
   const targetWidth = Math.min(
     maxWidth,
-    yesBaseWidth + yesGrowth * Math.max(16, screenW * 0.12)
+    yesBaseWidth + yesGrowth * 14
   );
 
   const targetHeight = Math.min(
     maxHeight,
-    yesBaseHeight + yesGrowth * Math.max(12, screenH * 0.075)
+    yesBaseHeight + yesGrowth * 22
   );
+
+  yes.style.position = "relative";
+  yes.style.left = "";
+  yes.style.top = "";
+  yes.style.transform = "";
+  yes.style.zIndex = "2";
 
   yes.style.width = `${targetWidth}px`;
   yes.style.height = `${targetHeight}px`;
   yes.style.minHeight = `${targetHeight}px`;
-  yes.style.flex = `0 0 ${targetWidth}px`;
-  yes.style.maxWidth = `${screenW - 8}px`;
-  yes.style.fontSize = `${Math.min(15 + yesGrowth * 0.8, 26)}px`;
-  yes.style.borderRadius = `${Math.max(4, 8 - yesGrowth * 0.15)}px`;
+  yes.style.maxWidth = "100%";
+  yes.style.maxHeight = `${maxHeight}px`;
+  yes.style.flex = `0 1 ${targetWidth}px`;
+  yes.style.fontSize = `${Math.min(15 + yesGrowth * 0.5, 22)}px`;
+  yes.style.borderRadius = "8px";
 
-  if (targetHeight >= screenH * 0.65 || targetWidth >= screenW * 0.8) {
-    yes.style.position = "fixed";
-    yes.style.left = "50%";
-    yes.style.top = "50%";
-    yes.style.transform = "translate(-50%, -50%)";
-    yes.style.zIndex = "9998";
-    yes.style.width = `${Math.min(screenW - 8, targetWidth)}px`;
-    yes.style.height = `${Math.min(screenH - 8, targetHeight)}px`;
-    yes.style.maxHeight = `${screenH - 8}px`;
-    yes.style.flex = "none";
-  } else {
-    yes.style.position = "relative";
-    yes.style.left = "";
-    yes.style.top = "";
-    yes.style.transform = "";
-    yes.style.zIndex = "2";
-    yes.style.maxHeight = "";
+  // 不要按钮始终在和好按钮上层
+  if (no) {
+    no.style.zIndex = "5";
   }
 }
 
 /* 第一阶段第三次点击“不要”时交换按钮 */
 function updateStageButtonEffects(stage) {
+
+function updateStageButtonEffects(stage) {
   if (!yes || !no) return;
 
+  // 第一阶段第三次点击后交换位置
   if (stage === 0 && stageNoClicks[0] >= 3) {
     buttons.classList.add("swapped");
   }
 
-  /* 第二、三阶段：每点一次就累计放大 */
+  // 第二、三阶段：只放大和好按钮
   if (stage === 1 || stage === 2) {
     buttons.classList.add("growing");
 
     yesGrowth += 1;
     applyYesGrowth();
 
-    /* 不要按钮保持原始尺寸，显示在和好按钮上方 */
-    no.style.width = "";
+    // 不要按钮保持原尺寸，层级高于和好按钮
     no.style.height = "";
     no.style.minHeight = "";
-    no.style.flex = "";
+    no.style.width = "";
+    no.style.flex = "0 0 auto";
     no.style.position = "relative";
-    no.style.zIndex = "9999";
-
-    const overlap = Math.min(yesGrowth * 8, 80);
-    no.style.transform = `translateX(${overlap}px)`;
+    no.style.left = "";
+    no.style.top = "";
+    no.style.transform = "none";
+    no.style.zIndex = "5";
   }
 }
+
 
 /* 第四阶段：不要按钮在和好按钮内部或周围移动 */
 function moveNoTowardYes() {
@@ -852,43 +916,50 @@ function moveNoTowardYes() {
   buttons.classList.remove("growing");
   applyYesGrowth();
 
-  no.style.position = "fixed";
-  no.style.zIndex = "9999";
-  no.style.width = "";
-  no.style.height = "";
+  // 获取不要按钮原始尺寸
+  const noRect = no.getBoundingClientRect();
+  const buttonWidth = noRect.width;
+  const buttonHeight = noRect.height;
+
+  // 不要按钮改为在按钮区域内绝对定位
+  no.style.position = "absolute";
+  no.style.width = `${buttonWidth}px`;
+  no.style.height = `${buttonHeight}px`;
+  no.style.minHeight = `${buttonHeight}px`;
+  no.style.maxWidth = "100%";
   no.style.flex = "none";
   no.style.transform = "none";
+  no.style.zIndex = "5";
 
   const yesRect = yes.getBoundingClientRect();
-  const noRect = no.getBoundingClientRect();
+  const buttonsRect = buttons.getBoundingClientRect();
 
-  const screenW = window.innerWidth;
-  const screenH = window.innerHeight;
+  // 转换成按钮区域内的坐标
+  const maxX = Math.max(0, buttons.clientWidth - buttonWidth);
+  const maxY = Math.max(0, buttons.clientHeight - buttonHeight);
+
+  // 在和好按钮附近移动，可以重叠，但不能越界
+  const centerX =
+    yesRect.left - buttonsRect.left + yesRect.width / 2 - buttonWidth / 2;
+
+  const centerY =
+    yesRect.top - buttonsRect.top + yesRect.height / 2 - buttonHeight / 2;
 
   const radius = Math.max(
-    12,
-    Math.min(yesRect.width, yesRect.height) * 0.42
+    0,
+    Math.min(yesRect.width, yesRect.height) * 0.35
   );
 
   const angle = Math.random() * Math.PI * 2;
   const distance = Math.random() * radius;
 
-  let targetX =
-    yesRect.left + yesRect.width / 2 +
-    Math.cos(angle) * distance -
-    noRect.width / 2;
+  const targetX = centerX + Math.cos(angle) * distance;
+  const targetY = centerY + Math.sin(angle) * distance;
 
-  let targetY =
-    yesRect.top + yesRect.height / 2 +
-    Math.sin(angle) * distance -
-    noRect.height / 2;
-
-  targetX = Math.max(4, Math.min(screenW - noRect.width - 4, targetX));
-  targetY = Math.max(4, Math.min(screenH - noRect.height - 4, targetY));
-
-  no.style.left = `${targetX}px`;
-  no.style.top = `${targetY}px`;
+  no.style.left = `${Math.max(0, Math.min(maxX, targetX))}px`;
+  no.style.top = `${Math.max(0, Math.min(maxY, targetY))}px`;
 }
+
   
 /* 最终阶段：不要按钮在整个屏幕范围内躲避 */
 let dodgeSpeed = 0.7;
