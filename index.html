@@ -383,11 +383,13 @@ h1 {
     height: 155px;
   }
 }
-/* ===== 按钮互动：保持手机端可用 ===== */
+  /* ===== 按钮互动：逐渐放大并适配手机 ===== */
 .buttons {
   position: relative;
+  width: 100%;
   min-height: 52px;
   align-items: center;
+  justify-content: center;
   overflow: visible;
   isolation: isolate;
 }
@@ -403,9 +405,11 @@ h1 {
 .yes {
   z-index: 2;
   transition:
-    width .25s ease,
-    flex-basis .25s ease,
-    transform .25s ease,
+    width .3s ease,
+    height .3s ease,
+    flex-basis .3s ease,
+    font-size .3s ease,
+    border-radius .3s ease,
     box-shadow .15s ease;
 }
 
@@ -418,23 +422,14 @@ h1 {
     box-shadow .15s ease;
 }
 
-/* 不要按钮移动时不受普通点击动画干扰 */
-.no.running-away:active {
-  transform: none;
-}
+/* 第一阶段交换按钮 */
+.buttons.swapped .yes { order: 2; }
+.buttons.swapped .no { order: 1; }
 
-/* 按钮位置交换 */
-.buttons.swapped .yes {
-  order: 2;
-}
-
-.buttons.swapped .no {
-  order: 1;
-}
-
-/* 和好按钮逐渐变大时，允许按钮互相挤压、重叠 */
+/* 允许按钮互相覆盖 */
 .buttons.growing {
   gap: 0;
+  min-height: 52px;
 }
 
 .buttons.growing .yes,
@@ -442,7 +437,11 @@ h1 {
   flex-shrink: 0;
 }
 
-/* 手机屏幕适配 */
+/* 不要按钮移动时不播放按压位移 */
+.no.running-away:active {
+  transform: none;
+}
+
 @media (max-width: 380px) {
   .buttons {
     gap: 8px;
@@ -455,6 +454,7 @@ h1 {
     padding: 8px 5px;
   }
 }
+  
 </style>
 </head>
 <body>
@@ -759,63 +759,167 @@ function updateStageButtonEffects(stage) {
    * 第二阶段、第三阶段：
    * 和好按钮逐渐变大，不要按钮保持原始尺寸。
    */
-  if (stage === 1 || stage === 2) {
-    buttons.classList.add("growing");
+/* 和好按钮尺寸累计：跨阶段保留，不再重置 */
+let yesGrowth = 0;
+let yesBaseWidth = 0;
+let yesBaseHeight = 0;
 
-    const originalYesWidth = 50;
-    const growth = Math.min(stageNoClicks[stage] * 9, 65);
-    const yesWidth = Math.min(originalYesWidth + growth, 115);
+function initializeYesSize() {
+  if (!yes) return;
 
-    yes.style.width = yesWidth + "%";
-    yes.style.flex = `0 0 ${yesWidth}%`;
+  const rect = yes.getBoundingClientRect();
+
+  if (!yesBaseWidth) yesBaseWidth = rect.width;
+  if (!yesBaseHeight) yesBaseHeight = rect.height;
+
+  applyYesGrowth();
+}
+
+function applyYesGrowth() {
+  if (!yes || !app) return;
+
+  const screenW = Math.min(window.innerWidth, document.documentElement.clientWidth);
+  const screenH = window.innerHeight;
+
+  const appRect = app.getBoundingClientRect();
+
+  /*
+   * 尺寸逐渐增加，最大可覆盖整个可视屏幕。
+   * 以 app 的宽度和视口高度为基准，适配手机。
+   */
+  const maxWidth = Math.max(yesBaseWidth, Math.min(screenW - 16, appRect.width));
+  const maxHeight = Math.max(yesBaseHeight, screenH - 16);
+
+  const targetWidth = Math.min(
+    maxWidth,
+    yesBaseWidth + yesGrowth * Math.max(16, screenW * 0.12)
+  );
+
+  const targetHeight = Math.min(
+    maxHeight,
+    yesBaseHeight + yesGrowth * Math.max(12, screenH * 0.075)
+  );
+
+  yes.style.width = `${targetWidth}px`;
+  yes.style.height = `${targetHeight}px`;
+  yes.style.minHeight = `${targetHeight}px`;
+  yes.style.flex = `0 0 ${targetWidth}px`;
+  yes.style.maxWidth = `${maxWidth}px`;
+  yes.style.fontSize = `${Math.min(15 + yesGrowth * 0.8, 26)}px`;
+  yes.style.borderRadius = `${Math.max(4, 8 - yesGrowth * 0.15)}px`;
+
+  /*
+   * 尺寸大于按钮区域时，使用 fixed 让和好按钮
+   * 能继续向视口边缘扩张，而不是撑开页面。
+   */
+  if (targetHeight >= screenH * 0.65 || targetWidth >= screenW * 0.8) {
+    yes.style.position = "fixed";
+    yes.style.left = "50%";
+    yes.style.top = "50%";
+    yes.style.transform = "translate(-50%, -50%)";
+    yes.style.zIndex = "9998";
+    yes.style.width = `${Math.min(screenW - 8, targetWidth)}px`;
+    yes.style.maxWidth = `${screenW - 8}px`;
+    yes.style.height = `${Math.min(screenH - 8, targetHeight)}px`;
+    yes.style.maxHeight = `${screenH - 8}px`;
+    yes.style.flex = "none";
+  } else {
+    yes.style.position = "relative";
+    yes.style.left = "";
+    yes.style.top = "";
+    yes.style.transform = "";
     yes.style.zIndex = "2";
-
-    no.style.width = "44%";
-    no.style.flex = "0 0 44%";
-    no.style.zIndex = "3";
-
-    /*
-     * 宽度超过容器时允许重叠，
-     * 不要按钮向外挤，不改变自身尺寸。
-     */
-    const overflow = Math.max(0, yesWidth + 44 - 100);
-    no.style.transform = `translateX(${Math.min(overflow * 0.8, 42)}px)`;
   }
 }
 
-/* 第四阶段：不要按钮每次向和好按钮靠近 */
-function moveNoTowardYes() {
+function updateStageButtonEffects(stage) {
   if (!yes || !no) return;
 
+  if (stage === 0 && stageNoClicks[0] >= 3) {
+    buttons.classList.add("swapped");
+  }
+
+  /*
+   * 第二、三阶段点击一次就放大一次。
+   * yesGrowth 是累计值，因此进入下一阶段不会变回去。
+   */
+  if (stage === 1 || stage === 2) {
+    buttons.classList.add("growing");
+
+    yesGrowth += 1;
+    applyYesGrowth();
+
+    /* 不要按钮保持原始尺寸，显示在和好按钮上层 */
+    no.style.width = "";
+    no.style.height = "";
+    no.style.minHeight = "";
+    no.style.flex = "";
+    no.style.position = "relative";
+    no.style.zIndex = "9999";
+
+    /*
+     * 按钮区域内允许重叠；不要按钮向和好按钮旁边挤。
+     */
+    const overlap = Math.min(yesGrowth * 8, 80);
+    no.style.transform = `translateX(${overlap}px)`;
+  }
+}
+
+/* 第四阶段：不要按钮在和好按钮内部或周围移动 */
+function moveNoTowardYes() {
+  if (!yes || !no || !buttons) return;
+
   buttons.classList.remove("growing");
-  buttons.style.position = "relative";
 
-  yes.style.position = "relative";
-  yes.style.zIndex = "2";
+  /*
+   * 和好按钮沿用此前累计的尺寸。
+   * 不要按钮在和好按钮上方，允许重叠。
+   */
+  applyYesGrowth();
 
-  no.style.position = "absolute";
-  no.style.zIndex = "5";
+  no.style.position = "fixed";
+  no.style.zIndex = "9999";
+  no.style.width = "";
+  no.style.height = "";
+  no.style.flex = "none";
+  no.style.transform = "none";
 
   const yesRect = yes.getBoundingClientRect();
-  const containerRect = buttons.getBoundingClientRect();
+  const noRect = no.getBoundingClientRect();
 
-  const yesCenter = yesRect.left + yesRect.width / 2 - containerRect.left;
-  const noCenter = no.getBoundingClientRect().left +
-    no.getBoundingClientRect().width / 2 - containerRect.left;
+  const screenW = window.innerWidth;
+  const screenH = window.innerHeight;
 
-  const step = Math.max(12, 34 - stageNoClicks[3] * 2);
-  const newCenter = noCenter + (yesCenter > noCenter ? step : -step);
-
-  const halfWidth = no.offsetWidth / 2;
-  const maxLeft = Math.max(0, buttons.clientWidth - no.offsetWidth);
-  const newLeft = Math.max(
-    0,
-    Math.min(maxLeft, newCenter - halfWidth)
+  /*
+   * 目标点围绕和好按钮中心随机分布。
+   * 按钮较大时，也可以移动到和好按钮内部。
+   */
+  const radius = Math.max(
+    12,
+    Math.min(yesRect.width, yesRect.height) * 0.42
   );
 
-  no.style.left = newLeft + "px";
-  no.style.top = "0px";
+  const angle = Math.random() * Math.PI * 2;
+  const distance = Math.random() * radius;
+
+  let targetX =
+    yesRect.left + yesRect.width / 2 +
+    Math.cos(angle) * distance -
+    noRect.width / 2;
+
+  let targetY =
+    yesRect.top + yesRect.height / 2 +
+    Math.sin(angle) * distance -
+    noRect.height / 2;
+
+  /* 限制在屏幕可视范围内，手机上也能点击 */
+  targetX = Math.max(4, Math.min(screenW - noRect.width - 4, targetX));
+  targetY = Math.max(4, Math.min(screenH - noRect.height - 4, targetY));
+
+  no.style.left = `${targetX}px`;
+  no.style.top = `${targetY}px`;
 }
+  
 
 /* 最终阶段：不要按钮在整个屏幕范围内躲避 */
 let dodgeSpeed = 0.7;
@@ -923,6 +1027,7 @@ window.addEventListener("resize", () => {
 function showQuestion(finalQuestion = false) {
   stopDodgeMode();
   resetButtonEffects();
+  initializeYesSize();
 
   phase = finalQuestion ? "finalQuestion" : "opening";
 
@@ -1014,7 +1119,7 @@ function makeUp() {
 
   document.getElementById("restart").addEventListener("click", restart);
 
-  footer.textContent = "ENDING UNLOCKED · 永远和姐姐贴贴 ♡";
+  footer.textContent = "LOVE YOU ♡";
 
   hearts(16);
 }
@@ -1027,6 +1132,9 @@ function restart() {
   finalIndex = 0;
   displayedStageIndex = -1;
   stageNoClicks = [0, 0, 0, 0];
+  yesGrowth = 0;
+  yesBaseWidth = 0;
+  yesBaseHeight = 0;
   dodgeSpeed = 0.7;
 
   buttons.innerHTML =
