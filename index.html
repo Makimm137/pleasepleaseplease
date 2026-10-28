@@ -383,27 +383,37 @@ h1 {
     height: 155px;
   }
 }
-  /* ===== 按钮互动：逐渐放大并适配手机 ===== */
+/* ===== 按钮互动：累积增长、独立尺寸、允许重叠 ===== */
+.app {
+  overflow: hidden;
+}
+
 .buttons {
   position: relative;
   width: 100%;
+  min-width: 0;
   min-height: 52px;
+  display: flex;
   align-items: center;
   justify-content: center;
-  overflow: visible;
+  gap: 12px;
+  overflow: hidden;
   isolation: isolate;
 }
 
 .btn {
-  position: relative;
-  min-width: 0;
+  box-sizing: border-box;
   flex-shrink: 0;
-  transform-origin: center;
+  min-width: 0;
   touch-action: manipulation;
+  transform-origin: center;
 }
 
-.yes {
+.buttons .yes {
+  position: relative;
   z-index: 2;
+  flex: 0 0 auto;
+  max-width: none;
   transition:
     width .3s ease,
     height .3s ease,
@@ -413,31 +423,52 @@ h1 {
     box-shadow .15s ease;
 }
 
-.no {
-  z-index: 3;
+.buttons .no {
+  position: relative;
+  z-index: 5;
+  flex: 0 0 auto;
+  width: 90px;
+  height: 60px;
+  min-height: 0;
+  max-width: none;
+  aspect-ratio: 3 / 2;
+  padding: 0 8px;
+  transform: none;
   transition:
     left .24s ease,
     top .24s ease,
-    transform .24s ease,
     box-shadow .15s ease;
 }
 
-/* 第一阶段交换按钮 */
+/* 第一阶段交换按钮位置 */
 .buttons.swapped .yes { order: 2; }
 .buttons.swapped .no { order: 1; }
 
-/* 允许按钮互相覆盖 */
+/* 第二、三阶段：不要按钮脱离排版，不会被和好按钮挤变形 */
 .buttons.growing {
-  gap: 0;
-  min-height: 52px;
+  gap: 12px;
+  align-items: center;
+  overflow: hidden;
 }
 
-.buttons.growing .yes,
+.buttons.growing .yes {
+  flex: 0 0 auto;
+  max-width: none;
+  z-index: 2;
+}
+
 .buttons.growing .no {
-  flex-shrink: 0;
+  position: absolute;
+  flex: 0 0 auto;
+  width: var(--no-width, 90px);
+  height: var(--no-height, 60px);
+  min-height: 0;
+  max-width: none;
+  aspect-ratio: 3 / 2;
+  z-index: 5;
+  transform: none;
 }
 
-/* 不要按钮移动时不播放按压位移 */
 .no.running-away:active {
   transform: none;
 }
@@ -453,107 +484,17 @@ h1 {
     font-size: 14px;
     padding: 8px 5px;
   }
-}
 
-  
-/* ===== 按钮最终布局修正 ===== */
-.app {
-  overflow: hidden;
-}
-
-.buttons {
-  position: relative;
-  width: 100%;
-  min-width: 0;
-  min-height: 52px;
-  display: flex;
-  align-items: stretch;
-  justify-content: center;
-  gap: 12px;
-  overflow: hidden;
-  isolation: isolate;
-}
-
-.buttons .yes {
-  position: relative;
-  z-index: 2;
-  min-width: 0;
-  max-width: 100%;
-  flex-shrink: 1;
-  box-sizing: border-box;
-}
-
-.buttons .no {
-  position: relative;
-  z-index: 5;
-  min-width: 0;
-  max-width: 100%;
-  flex-shrink: 1;
-  box-sizing: border-box;
-  transform: none;
-}
-
-/* 放大时允许重叠，但两个按钮都留在按钮区域里 */
-.buttons.growing {
-  gap: 0;
-  overflow: hidden;
-}
-
-.buttons.growing .yes {
-  flex-shrink: 1;
-  max-width: 100%;
-}
-
-.buttons.growing .no {
-  flex: 0 0 auto;
-  z-index: 5;
-  transform: none;
-}
-
-/* 手机屏幕 */
-@media (max-width: 380px) {
-  .buttons {
-    gap: 8px;
-  }
-
-  .buttons .yes,
   .buttons .no {
-    min-width: 0;
-    max-width: 100%;
+    width: 78px;
+    height: 52px;
+    min-height: 0;
   }
-}
 
-  /* 第二、三阶段：和好按钮增长，不要按钮逐渐缩小 */
-.buttons.growing {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  overflow: hidden;
-  isolation: isolate;
-  min-height: 52px;
-}
-
-.buttons.growing .yes {
-  position: relative;
-  z-index: 2;
-  flex: 0 0 auto;
-  box-sizing: border-box;
-  max-width: 100%;
-}
-
-.buttons.growing .no {
-  position: relative;
-  z-index: 5;
-  flex: 0 0 auto;
-  box-sizing: border-box;
-  aspect-ratio: 3 / 2;
-  min-width: 54px;
-  min-height: 36px;
-  max-width: 100%;
-  max-height: none;
-  transform: none;
+  .buttons.growing .no {
+    width: var(--no-width, 78px);
+    height: var(--no-height, 52px);
+  }
 }
   
 </style>
@@ -820,40 +761,16 @@ function hearts(count = 2) {
 }
 
 
-/* 每次进入新阶段，清除阶段特效，但保留和好按钮累计尺寸 */
-function resetButtonEffects() {
-  buttons.classList.remove("swapped", "growing");
-
-  yes = document.getElementById("yes");
-  no = document.getElementById("no");
-
-  if (!yes || !no) return;
-
-  // 注意：这里不重置 yes 的宽度、高度和定位，
-  // 这样进入下一阶段时，和好按钮会保留之前的尺寸。
-
-  no.style.width = "";
-  no.style.height = "";
-  no.style.minHeight = "";
-  no.style.flex = "";
-  no.style.position = "";
-  no.style.left = "";
-  no.style.top = "";
-  no.style.transform = "";
-  no.style.zIndex = "";
-  no.style.fontSize = "";
-  no.style.maxWidth = "";
-  no.style.maxHeight = "";
-  no.classList.remove("running-away");
-
-  buttons.style.minHeight = "";
-  buttons.style.height = "";
-}
-
-/* 和好按钮的累计尺寸 */
+/* ===== 按钮尺寸与位置：跨阶段累积 ===== */
 let yesGrowth = 0;
 let yesBaseWidth = 0;
 let yesBaseHeight = 0;
+
+let noBaseWidth = 0;
+let noBaseHeight = 0;
+let noStartX = null;
+let noStartY = null;
+let noMoveDistance = 0;
 
 function initializeYesSize() {
   if (!yes) return;
@@ -863,83 +780,144 @@ function initializeYesSize() {
   if (!yesBaseWidth) yesBaseWidth = rect.width;
   if (!yesBaseHeight) yesBaseHeight = rect.height;
 
+  if (no && !noBaseWidth) {
+    const noRect = no.getBoundingClientRect();
+    noBaseWidth = noRect.width;
+    noBaseHeight = noRect.height;
+  }
+
   applyYesGrowth();
 }
 
 function applyYesGrowth() {
   if (!yes || !buttons || !yesBaseWidth || !yesBaseHeight) return;
 
-  const availableWidth = buttons.clientWidth;
-  const screenH = window.innerHeight;
-
-  // 按钮始终留在原来的按钮区域，不使用 fixed，不覆盖上方文字
-  const maxWidth = Math.max(yesBaseWidth, availableWidth);
-  const maxHeight = Math.max(
-    yesBaseHeight,
-    Math.min(screenH * 0.42, 300)
-  );
-
-  const targetWidth = Math.min(
-    maxWidth,
-    yesBaseWidth + yesGrowth * 14
-  );
-
-  const targetHeight = Math.min(
-    maxHeight,
-    yesBaseHeight + yesGrowth * 22
-  );
+  const targetWidth = yesBaseWidth + yesGrowth * 14;
+  const targetHeight = yesBaseHeight + yesGrowth * 22;
 
   yes.style.position = "relative";
-  yes.style.left = "";
-  yes.style.top = "";
-  yes.style.transform = "";
-  yes.style.zIndex = "2";
-
   yes.style.width = `${targetWidth}px`;
   yes.style.height = `${targetHeight}px`;
   yes.style.minHeight = `${targetHeight}px`;
-  yes.style.maxWidth = "100%";
-  yes.style.maxHeight = `${maxHeight}px`;
-  yes.style.flex = `0 1 ${targetWidth}px`;
+  yes.style.maxWidth = "none";
+  yes.style.maxHeight = "none";
+  yes.style.flex = `0 0 ${targetWidth}px`;
   yes.style.fontSize = `${Math.min(15 + yesGrowth * 0.5, 22)}px`;
-  yes.style.borderRadius = "8px";
+  yes.style.zIndex = "2";
 
-  // 不要按钮始终在和好按钮上层
-  if (no) {
-    no.style.zIndex = "5";
+  if (no) no.style.zIndex = "5";
+
+  // 按钮区域随和好按钮高度增长，避免向上遮住气泡文字
+  buttons.style.minHeight = `${Math.max(52, targetHeight)}px`;
+}
+
+/* 初始化“不要”按钮的位置和独立尺寸 */
+function prepareNoButtonPosition() {
+  if (!no || !buttons) return;
+
+  const buttonsRect = buttons.getBoundingClientRect();
+  const noRect = no.getBoundingClientRect();
+
+  if (!noBaseWidth) noBaseWidth = noRect.width;
+  if (!noBaseHeight) noBaseHeight = noRect.height;
+
+  // 固定独立尺寸，比例始终为 3:2
+  noBaseHeight = noBaseWidth * 2 / 3;
+
+  no.style.setProperty("--no-width", `${noBaseWidth}px`);
+  no.style.setProperty("--no-height", `${noBaseHeight}px`);
+  no.style.width = `${noBaseWidth}px`;
+  no.style.height = `${noBaseHeight}px`;
+  no.style.minHeight = "0";
+  no.style.boxSizing = "border-box";
+  no.style.flex = "0 0 auto";
+  no.style.zIndex = "5";
+
+  if (noStartX === null) {
+    noStartX = noRect.left - buttonsRect.left;
+    noStartY = noRect.top - buttonsRect.top;
+  }
+
+  no.style.position = "absolute";
+  no.style.left = `${noStartX + noMoveDistance}px`;
+  no.style.top = `${noStartY}px`;
+}
+
+/* 每次进入新阶段时清除特效，但保留累积尺寸和位置 */
+function resetButtonEffects() {
+  buttons.classList.remove("swapped", "growing");
+
+  yes = document.getElementById("yes");
+  no = document.getElementById("no");
+
+  if (!yes || !no) return;
+
+  // 第二、三阶段之间切换时，保留按钮尺寸与位置
+  const preserveGrowth =
+    phase === "apology" && (stageIndex === 1 || stageIndex === 2);
+
+  if (!preserveGrowth) {
+    no.style.removeProperty("--no-width");
+    no.style.removeProperty("--no-height");
+    no.style.width = "";
+    no.style.height = "";
+    no.style.minHeight = "";
+    no.style.flex = "";
+    no.style.position = "";
+    no.style.left = "";
+    no.style.top = "";
+    no.style.transform = "";
+    no.style.zIndex = "";
+    no.style.fontSize = "";
+    no.style.maxWidth = "";
+    no.style.maxHeight = "";
+
+    noBaseWidth = 0;
+    noBaseHeight = 0;
+    noStartX = null;
+    noStartY = null;
+    noMoveDistance = 0;
+
+    buttons.style.minHeight = "";
+    buttons.style.height = "";
   }
 }
 
 /* 第一阶段第三次点击“不要”时交换按钮 */
-
 function updateStageButtonEffects(stage) {
-  if (!yes || !no) return;
+  if (!yes || !no || !buttons) return;
 
-  // 第一阶段第三次点击后交换位置
   if (stage === 0 && stageNoClicks[0] >= 3) {
     buttons.classList.add("swapped");
+    return;
   }
 
-  // 第二、三阶段：只放大和好按钮
   if (stage === 1 || stage === 2) {
-    buttons.classList.add("growing");
+    // 第一次进入时记录“不要”的原始位置与尺寸
+    if (!buttons.classList.contains("growing")) {
+      prepareNoButtonPosition();
+      buttons.classList.add("growing");
+    }
 
+    // 和好按钮每次继续累积增长，不受“不要”按钮尺寸影响
     yesGrowth += 1;
     applyYesGrowth();
 
-    // 不要按钮保持原尺寸，层级高于和好按钮
-    no.style.height = "";
-    no.style.minHeight = "";
-    no.style.width = "";
-    no.style.flex = "0 0 auto";
-    no.style.position = "relative";
-    no.style.left = "";
-    no.style.top = "";
-    no.style.transform = "none";
+    // 只在有空间时把“不要”往旁边推；到边界后不再移动
+    const maxX = Math.max(0, buttons.clientWidth - noBaseWidth);
+    const nextDistance = noMoveDistance + 12;
+
+    if (noStartX + nextDistance <= maxX) {
+      noMoveDistance = nextDistance;
+    } else {
+      noMoveDistance = Math.max(0, maxX - noStartX);
+    }
+
+    no.style.left = `${noStartX + noMoveDistance}px`;
+    no.style.top = `${noStartY}px`;
     no.style.zIndex = "5";
   }
 }
-
 
 /* 第四阶段：不要按钮在和好按钮内部或周围移动 */
 function moveNoTowardYes() {
@@ -1207,6 +1185,11 @@ function restart() {
   yesGrowth = 0;
   yesBaseWidth = 0;
   yesBaseHeight = 0;
+  noBaseWidth = 0;
+noBaseHeight = 0;
+noStartX = null;
+noStartY = null;
+noMoveDistance = 0;
   dodgeSpeed = 0.7;
 
   buttons.innerHTML =
