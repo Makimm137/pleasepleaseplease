@@ -383,7 +383,78 @@ h1 {
     height: 155px;
   }
 }
+/* ===== 按钮互动：保持手机端可用 ===== */
+.buttons {
+  position: relative;
+  min-height: 52px;
+  align-items: center;
+  overflow: visible;
+  isolation: isolate;
+}
 
+.btn {
+  position: relative;
+  min-width: 0;
+  flex-shrink: 0;
+  transform-origin: center;
+  touch-action: manipulation;
+}
+
+.yes {
+  z-index: 2;
+  transition:
+    width .25s ease,
+    flex-basis .25s ease,
+    transform .25s ease,
+    box-shadow .15s ease;
+}
+
+.no {
+  z-index: 3;
+  transition:
+    left .24s ease,
+    top .24s ease,
+    transform .24s ease,
+    box-shadow .15s ease;
+}
+
+/* 不要按钮移动时不受普通点击动画干扰 */
+.no.running-away:active {
+  transform: none;
+}
+
+/* 按钮位置交换 */
+.buttons.swapped .yes {
+  order: 2;
+}
+
+.buttons.swapped .no {
+  order: 1;
+}
+
+/* 和好按钮逐渐变大时，允许按钮互相挤压、重叠 */
+.buttons.growing {
+  gap: 0;
+}
+
+.buttons.growing .yes,
+.buttons.growing .no {
+  flex-shrink: 0;
+}
+
+/* 手机屏幕适配 */
+@media (max-width: 380px) {
+  .buttons {
+    gap: 8px;
+    margin-top: 16px;
+  }
+
+  .btn {
+    min-height: 46px;
+    font-size: 14px;
+    padding: 8px 5px;
+  }
+}
 </style>
 </head>
 <body>
@@ -480,19 +551,25 @@ const finalItems = [
 const scene = document.getElementById("scene");
 const pet = document.getElementById("pet");
 const message = document.getElementById("message");
-const yes = document.getElementById("yes");
-const no = document.getElementById("no");
 const buttons = document.getElementById("buttons");
-const bar = document.getElementById("bar");
 const footer = document.getElementById("footer");
+const app = document.querySelector(".app");
+
+let yes = document.getElementById("yes");
+let no = document.getElementById("no");
 
 let stageIndex = 0;
 let itemIndex = 0;
 let finalIndex = 0;
 let phase = "opening";
 
+/* 记录当前正在展示的文案属于哪个阶段 */
+let displayedStageIndex = -1;
 
-/* ===== 表情图片配置 ===== */
+/* 每个阶段点击“不要”的次数 */
+let stageNoClicks = [0, 0, 0, 0];
+
+/* 图片文件 */
 const emojiImages = {
   cute: ["1.gif", "2.gif", "3.gif", "4.gif", "5.gif"],
   love: [
@@ -507,9 +584,28 @@ const emojiImages = {
   good: ["1.gif"]
 };
 
-/* 记住上一张图，尽量避免连续重复 */
 let lastEmoji = "";
+const imageCache = new Map();
+let imageRequestId = 0;
 
+/* 预加载所有图片，尽可能减少切换时的空白 */
+function preloadImages() {
+  Object.entries(emojiImages).forEach(([folder, files]) => {
+    files.forEach(file => {
+      const path = `emoji/${folder}/${file}`;
+
+      if (!imageCache.has(path)) {
+        const img = new Image();
+        img.src = path;
+        imageCache.set(path, img);
+      }
+    });
+  });
+}
+
+preloadImages();
+
+/* 选择随机图片，尽量避免连续重复 */
 function randomEmoji(folder) {
   const files = emojiImages[folder] || emojiImages.cute;
 
@@ -525,7 +621,6 @@ function randomEmoji(folder) {
   return lastEmoji;
 }
 
-/* 根据当前文案和情绪选择图片文件夹 */
 function chooseEmojiFolder(text, mood) {
   if (mood === "good") return "good";
   if (mood === "mad") return "mad";
@@ -552,86 +647,305 @@ function chooseEmojiFolder(text, mood) {
   return "cute";
 }
 
-/* 替换原来的 show() */
+/*
+ * 图片切换策略：
+ * 先加载新图，成功后才替换旧图。
+ * 如果新图还没加载好，上一张图会继续显示。
+ * 快速连续点击时，只采用最后一次请求的图片。
+ */
+function setPetImage(path) {
+  const requestId = ++imageRequestId;
+
+  let img = imageCache.get(path);
+
+  if (!img) {
+    img = new Image();
+    img.src = path;
+    imageCache.set(path, img);
+  }
+
+  function applyImage() {
+    if (requestId !== imageRequestId) return;
+
+    const displayImg = document.createElement("img");
+    displayImg.alt = "小动物表情";
+    displayImg.draggable = false;
+    displayImg.decoding = "async";
+    displayImg.src = path;
+
+    pet.replaceChildren(displayImg);
+  }
+
+  if (img.complete && img.naturalWidth > 0) {
+    applyImage();
+    return;
+  }
+
+  img.addEventListener("load", applyImage, { once: true });
+
+  img.addEventListener("error", () => {
+    if (requestId !== imageRequestId) return;
+    // 新图加载失败时不清除旧图
+  }, { once: true });
+}
+
 function show(text, mood = "cute", emoji = "🐶") {
   message.textContent = text;
+  scene.className = "scene " + mood;
 
   const folder = chooseEmojiFolder(text, mood);
   const imagePath = randomEmoji(folder);
 
-  scene.className = "scene " + mood;
-
-  pet.innerHTML = "";
-
-  const img = document.createElement("img");
-  img.src = imagePath;
-  img.alt = "小动物表情";
-  img.draggable = false;
-
-  img.onerror = function () {
-    img.alt = "图片加载失败：" + imagePath;
-    img.style.width = "100%";
-    img.style.height = "auto";
-  };
-
-  pet.appendChild(img);
-
-  if (typeof bar !== "undefined" && bar) {
-    bar.style.width = getProgress() + "%";
-  }
+  setPetImage(imagePath);
 
   if (mood === "happy" || mood === "love" || mood === "good") {
     hearts(3);
   }
 }
 
-
-function getProgress() {
-  const total = stages.reduce((n, s) => n + s.items.length, 0)
-    + finalItems.length;
-  let done = 0;
-
-  for (let i = 0; i < stageIndex; i++) {
-    done += stages[i].items.length;
-  }
-  done += itemIndex;
-
-  if (phase === "final" || phase === "loop") {
-    done = stages.reduce((n, s) => n + s.items.length, 0)
-      + finalIndex;
-  }
-  if (phase === "loop" || phase === "ending") return 100;
-  return Math.min(99, Math.round(done / total * 100));
-}
-
 function hearts(count = 2) {
   const symbols = ["♡", "♥", "✦", "💕"];
+
   for (let i = 0; i < count; i++) {
     const el = document.createElement("span");
     el.className = "float-heart";
     el.textContent = symbols[Math.floor(Math.random() * symbols.length)];
     el.style.left = (20 + Math.random() * 60) + "vw";
     el.style.top = (50 + Math.random() * 35) + "vh";
+
     document.body.appendChild(el);
     setTimeout(() => el.remove(), 1900);
   }
 }
 
+/* 每次进入新阶段，重置按钮特效 */
+function resetButtonEffects() {
+  buttons.classList.remove("swapped", "growing");
+  yes = document.getElementById("yes");
+  no = document.getElementById("no");
+
+  if (!yes || !no) return;
+
+  yes.style.width = "";
+  yes.style.flex = "";
+  yes.style.transform = "";
+  yes.style.position = "";
+  yes.style.left = "";
+  yes.style.top = "";
+  yes.style.zIndex = "";
+
+  no.style.width = "";
+  no.style.flex = "";
+  no.style.position = "";
+  no.style.left = "";
+  no.style.top = "";
+  no.style.transform = "";
+  no.style.zIndex = "";
+  no.classList.remove("running-away");
+
+  buttons.style.minHeight = "";
+  buttons.style.height = "";
+}
+
+/* 第一阶段第三次点“不要”交换按钮 */
+function updateStageButtonEffects(stage) {
+  if (!yes || !no) return;
+
+  if (stage === 0 && stageNoClicks[0] >= 3) {
+    buttons.classList.add("swapped");
+  }
+
+  /*
+   * 第二阶段、第三阶段：
+   * 和好按钮逐渐变大，不要按钮保持原始尺寸。
+   */
+  if (stage === 1 || stage === 2) {
+    buttons.classList.add("growing");
+
+    const originalYesWidth = 50;
+    const growth = Math.min(stageNoClicks[stage] * 9, 65);
+    const yesWidth = Math.min(originalYesWidth + growth, 115);
+
+    yes.style.width = yesWidth + "%";
+    yes.style.flex = `0 0 ${yesWidth}%`;
+    yes.style.zIndex = "2";
+
+    no.style.width = "44%";
+    no.style.flex = "0 0 44%";
+    no.style.zIndex = "3";
+
+    /*
+     * 宽度超过容器时允许重叠，
+     * 不要按钮向外挤，不改变自身尺寸。
+     */
+    const overflow = Math.max(0, yesWidth + 44 - 100);
+    no.style.transform = `translateX(${Math.min(overflow * 0.8, 42)}px)`;
+  }
+}
+
+/* 第四阶段：不要按钮每次向和好按钮靠近 */
+function moveNoTowardYes() {
+  if (!yes || !no) return;
+
+  buttons.classList.remove("growing");
+  buttons.style.position = "relative";
+
+  yes.style.position = "relative";
+  yes.style.zIndex = "2";
+
+  no.style.position = "absolute";
+  no.style.zIndex = "5";
+
+  const yesRect = yes.getBoundingClientRect();
+  const containerRect = buttons.getBoundingClientRect();
+
+  const yesCenter = yesRect.left + yesRect.width / 2 - containerRect.left;
+  const noCenter = no.getBoundingClientRect().left +
+    no.getBoundingClientRect().width / 2 - containerRect.left;
+
+  const step = Math.max(12, 34 - stageNoClicks[3] * 2);
+  const newCenter = noCenter + (yesCenter > noCenter ? step : -step);
+
+  const halfWidth = no.offsetWidth / 2;
+  const maxLeft = Math.max(0, buttons.clientWidth - no.offsetWidth);
+  const newLeft = Math.max(
+    0,
+    Math.min(maxLeft, newCenter - halfWidth)
+  );
+
+  no.style.left = newLeft + "px";
+  no.style.top = "0px";
+}
+
+/* 最终阶段：不要按钮在整个屏幕范围内躲避 */
+let dodgeSpeed = 0.7;
+const maxDodgeSpeed = 5.5;
+let dodgeX = 0;
+let dodgeY = 0;
+let dodgeTargetX = 0;
+let dodgeTargetY = 0;
+let dodgeFrame = null;
+let dodgeActive = false;
+
+function startDodgeMode() {
+  if (!no || !buttons) return;
+
+  dodgeActive = true;
+  dodgeSpeed = 0.7;
+
+  no.classList.add("running-away");
+  no.style.position = "fixed";
+  no.style.zIndex = "9999";
+  no.style.width = Math.min(150, window.innerWidth * 0.4) + "px";
+  no.style.flex = "none";
+  no.style.left = "0px";
+  no.style.top = "0px";
+  no.style.transform = "none";
+
+  const rect = no.getBoundingClientRect();
+  dodgeX = rect.left;
+  dodgeY = rect.top;
+
+  chooseDodgeTarget();
+  animateDodge();
+}
+
+function chooseDodgeTarget() {
+  if (!no || !dodgeActive) return;
+
+  const margin = 8;
+  const maxX = Math.max(margin, window.innerWidth - no.offsetWidth - margin);
+  const maxY = Math.max(margin, window.innerHeight - no.offsetHeight - margin);
+
+  dodgeTargetX = margin + Math.random() * (maxX - margin);
+  dodgeTargetY = margin + Math.random() * (maxY - margin);
+}
+
+function animateDodge() {
+  if (!dodgeActive || !no) return;
+
+  const dx = dodgeTargetX - dodgeX;
+  const dy = dodgeTargetY - dodgeY;
+  const distance = Math.hypot(dx, dy);
+
+  if (distance < 2) {
+    chooseDodgeTarget();
+  } else {
+    dodgeX += (dx / distance) * Math.min(dodgeSpeed, distance);
+    dodgeY += (dy / distance) * Math.min(dodgeSpeed, distance);
+  }
+
+  const maxX = Math.max(0, window.innerWidth - no.offsetWidth);
+  const maxY = Math.max(0, window.innerHeight - no.offsetHeight);
+
+  dodgeX = Math.max(0, Math.min(maxX, dodgeX));
+  dodgeY = Math.max(0, Math.min(maxY, dodgeY));
+
+  no.style.left = dodgeX + "px";
+  no.style.top = dodgeY + "px";
+
+  dodgeFrame = requestAnimationFrame(animateDodge);
+}
+
+function stopDodgeMode() {
+  dodgeActive = false;
+
+  if (dodgeFrame !== null) {
+    cancelAnimationFrame(dodgeFrame);
+    dodgeFrame = null;
+  }
+
+  if (no) {
+    no.classList.remove("running-away");
+    no.style.position = "";
+    no.style.zIndex = "";
+    no.style.width = "";
+    no.style.flex = "";
+    no.style.left = "";
+    no.style.top = "";
+    no.style.transform = "";
+  }
+}
+
+/* 移动设备方向或尺寸变化时，重新限制按钮范围 */
+window.addEventListener("resize", () => {
+  if (!dodgeActive || !no) return;
+
+  const maxX = Math.max(0, window.innerWidth - no.offsetWidth);
+  const maxY = Math.max(0, window.innerHeight - no.offsetHeight);
+
+  dodgeX = Math.min(dodgeX, maxX);
+  dodgeY = Math.min(dodgeY, maxY);
+  dodgeTargetX = Math.min(dodgeTargetX, maxX);
+  dodgeTargetY = Math.min(dodgeTargetY, maxY);
+});
+
 function showQuestion(finalQuestion = false) {
+  stopDodgeMode();
+  resetButtonEffects();
+
   phase = finalQuestion ? "finalQuestion" : "opening";
+
   show("可以跟我和好吗？🥺", "shy", "🐶");
+
   yes.textContent = "♡ 和好 ♡";
   no.textContent = finalQuestion ? "真的不要" : "不要";
+
   buttons.classList.remove("hidden");
   footer.textContent = "再给小狗一次机会嘛…… ♡";
 }
 
 function nextApology() {
-  // 跳过已经结束的阶段
-  while (stageIndex < stages.length &&
-         itemIndex >= stages[stageIndex].items.length) {
+  while (
+    stageIndex < stages.length &&
+    itemIndex >= stages[stageIndex].items.length
+  ) {
     stageIndex++;
     itemIndex = 0;
+
+    if (stageIndex < stages.length) {
+      resetButtonEffects();
+    }
   }
 
   if (stageIndex >= stages.length) {
@@ -640,14 +954,17 @@ function nextApology() {
   }
 
   phase = "apology";
+  displayedStageIndex = stageIndex;
+
   const item = stages[stageIndex].items[itemIndex];
   itemIndex++;
 
   show(item[0], item[1], item[2]);
 
-  // 最后一条文案也展示完之后，下一次点击进入最终阶段
-  if (stageIndex === stages.length - 1 &&
-      itemIndex === stages[stageIndex].items.length) {
+  if (
+    stageIndex === stages.length - 1 &&
+    itemIndex === stages[stageIndex].items.length
+  ) {
     footer.textContent = "小狗还在努力想办法…… ♡";
   }
 }
@@ -656,12 +973,20 @@ function nextFinal() {
   if (finalIndex < finalItems.length) {
     const item = finalItems[finalIndex];
     finalIndex++;
+
     phase = "final";
     show(item[0], item[1], item[2]);
+
+    /*
+     * 最终拒绝阶段开始躲避。
+     * 速度每次拒绝后增加，但不会超过上限。
+     */
+    startDodgeMode();
 
     if (finalIndex === finalItems.length) {
       footer.textContent = "最后一次机会了……真的不抱抱吗？";
     }
+
     return;
   }
 
@@ -669,10 +994,12 @@ function nextFinal() {
   show("好吧，我放弃了…但我会一直等你的！", "sad", "🐶");
   footer.textContent = "你点多少次，小狗就等多少次。♡";
   no.textContent = "还是不要";
+
+  startDodgeMode();
 }
 
-
 function makeUp() {
+  stopDodgeMode();
   phase = "ending";
 
   show(
@@ -687,28 +1014,28 @@ function makeUp() {
 
   document.getElementById("restart").addEventListener("click", restart);
 
-  if (typeof bar !== "undefined" && bar) {
-    bar.style.width = "100%";
-  }
-
   footer.textContent = "ENDING UNLOCKED · 永远和姐姐贴贴 ♡";
 
   hearts(16);
 }
 
-
 function restart() {
+  stopDodgeMode();
+
   stageIndex = 0;
   itemIndex = 0;
   finalIndex = 0;
+  displayedStageIndex = -1;
+  stageNoClicks = [0, 0, 0, 0];
+  dodgeSpeed = 0.7;
 
   buttons.innerHTML =
     '<button class="btn yes" id="yes">♡ 和好 ♡</button>' +
     '<button class="btn no" id="no">不要</button>';
 
-  document.getElementById("yes").addEventListener("click", makeUp);
-  document.getElementById("no").addEventListener("click", refuse);
-  bar.style.width = "0";
+  yes = document.getElementById("yes");
+  no = document.getElementById("no");
+
   showQuestion(false);
 }
 
@@ -721,31 +1048,65 @@ function refuse() {
   }
 
   if (phase === "apology") {
+    const currentStage = displayedStageIndex;
+
+    if (currentStage >= 0 && currentStage < stages.length) {
+      stageNoClicks[currentStage]++;
+
+      if (currentStage === 0) {
+        updateStageButtonEffects(0);
+      }
+
+      if (currentStage === 1 || currentStage === 2) {
+        updateStageButtonEffects(currentStage);
+      }
+
+      if (currentStage === 3) {
+        moveNoTowardYes();
+      }
+    }
+
     nextApology();
     return;
   }
 
   if (phase === "finalQuestion") {
     finalIndex = 0;
+    dodgeSpeed = 0.7;
     nextFinal();
     return;
   }
 
   if (phase === "final") {
+    dodgeSpeed = Math.min(dodgeSpeed + 0.45, maxDodgeSpeed);
     nextFinal();
     return;
   }
 
   if (phase === "loop") {
+    dodgeSpeed = Math.min(dodgeSpeed + 0.45, maxDodgeSpeed);
     show("好吧，我放弃了…但我会一直等你的！", "sad", "🐶");
     hearts(2);
     return;
   }
 
-  if (phase === "ending") restart();
+  if (phase === "ending") {
+    restart();
+  }
 }
 
-yes.addEventListener("click", makeUp);
-no.addEventListener("click", refuse);
+/* 用事件委托，避免和好结局重建按钮后旧引用失效 */
+buttons.addEventListener("click", event => {
+  const target = event.target.closest("button");
+  if (!target) return;
+
+  if (target.id === "yes") {
+    makeUp();
+  } else if (target.id === "no") {
+    refuse();
+  }
+});
+
+/* 初始显示 */
 showQuestion(false);
 </script>
