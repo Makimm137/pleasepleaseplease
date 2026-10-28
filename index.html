@@ -874,7 +874,8 @@ function applyYesGrowth() {
   }
 }
 
-/* 第一次进入增长阶段时记录两个按钮各自的原始位置 */
+
+/* 第一次进入增长阶段时记录按钮原始尺寸与位置 */
 function prepareNoButtonPosition() {
   if (!yes || !no || !buttons) return;
 
@@ -882,6 +883,18 @@ function prepareNoButtonPosition() {
   const yesRect = yes.getBoundingClientRect();
   const noRect = no.getBoundingClientRect();
 
+  // 前一阶段重置过尺寸时，必须重新记录基础尺寸
+  if (!yesBaseWidth || !yesBaseHeight) {
+    yesBaseWidth = yesRect.width;
+    yesBaseHeight = yesRect.height;
+  }
+
+  if (!noBaseWidth || !noBaseHeight) {
+    noBaseWidth = noRect.width;
+    noBaseHeight = noRect.height;
+  }
+
+  // 记录两个按钮进入增长阶段前的位置
   if (yesStartX === null) {
     yesStartX = yesRect.left - buttonsRect.left;
     yesStartY = yesRect.top - buttonsRect.top;
@@ -892,10 +905,7 @@ function prepareNoButtonPosition() {
     noStartY = noRect.top - buttonsRect.top;
   }
 
-  if (!noBaseWidth) noBaseWidth = noRect.width;
-  if (!noBaseHeight) noBaseHeight = noRect.height;
-
-  // 不要按钮独立保留自己的尺寸，不跟随和好按钮变高
+  // 不要按钮独立保留尺寸，不跟随和好按钮变高
   no.style.width = `${noBaseWidth}px`;
   no.style.height = `${noBaseHeight}px`;
   no.style.minHeight = `${noBaseHeight}px`;
@@ -906,6 +916,7 @@ function prepareNoButtonPosition() {
   no.style.top = `${noStartY}px`;
   no.style.zIndex = "5";
 }
+
 
 /* 重置按钮：跨阶段时保留增长与位置 */
 function resetButtonEffects() {
